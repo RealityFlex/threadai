@@ -11,6 +11,21 @@ from app.models.models import User, DocumentEvaluation
 import math
 import time
 from typing import Optional
+from dotenv import load_dotenv
+import httpx
+
+# Загружаем переменные окружения
+load_dotenv()
+
+# Получаем URL API Ollama из переменных окружения или используем значение по умолчанию
+OLLAMA_API_URL = os.getenv("OLLAMA_API_URL", "http://localhost:11434")
+
+# Библиотека ollama не имеет метода set_host, поэтому мы настроим URL через переменную окружения
+# ollama internally uses OLLAMA_HOST env variable
+os.environ["OLLAMA_HOST"] = OLLAMA_API_URL
+
+# Выводим URL для диагностики
+print(f"Используем Ollama API URL: {OLLAMA_API_URL}")
 
 router = APIRouter()
 
@@ -29,6 +44,19 @@ def evaluate_document(image_path):
         return {"error": "Файл не найден"}
     
     try:
+        # Логируем адрес API для отладки
+        print(f"Отправляем запрос к Ollama API по адресу: {OLLAMA_API_URL}")
+        
+        # Отправляем запрос к модели
+        # Проверим доступность сервера Ollama перед отправкой запроса
+        try:
+            with httpx.Client(timeout=5.0) as client:
+                health_check = client.get(f"{OLLAMA_API_URL}/api/health")
+                if health_check.status_code != 200:
+                    print(f"Предупреждение: Сервер Ollama вернул код {health_check.status_code}")
+        except Exception as health_error:
+            print(f"Предупреждение: Не удалось проверить состояние сервера Ollama: {str(health_error)}")
+        
         # Отправляем запрос к модели
         res = ollama.chat(
             model="gemma3",
