@@ -5,6 +5,7 @@ import uvicorn
 from sqlalchemy.exc import SQLAlchemyError
 from pydantic import ValidationError
 import doc_rec
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.utils.exception_handlers import (
     sqlalchemy_exception_handler,
@@ -22,6 +23,15 @@ app = FastAPI(
     title="Threads API", 
     description="API для работы с постами и комментариями",
     version="1.0.0"
+)
+
+# Настройка CORS для всех доменов
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Разрешаем все домены
+    allow_credentials=True,
+    allow_methods=["*"],  # Разрешаем все методы
+    allow_headers=["*"],  # Разрешаем все заголовки
 )
 
 # Добавляем middleware для логирования
