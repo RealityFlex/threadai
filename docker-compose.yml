@@ -13,15 +13,12 @@ services:
       - app-network
 
   ollama:
-    build:
-      context: .
-      dockerfile: Dockerfile-olama
-    container_name: ollama
+    image: ollama/ollama
     restart: always
-    ports:
-      - "11434:11434"
     volumes:
       - ollama_data:/root/.ollama
+    ports:
+      - "11434:11434"
     networks:
       - app-network
 
