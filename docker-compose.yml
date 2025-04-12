@@ -3,7 +3,7 @@ services:
     build: .
     restart: always
     expose:
-      - "8000"
+      - "8080:8000"
     volumes:
       - .:/app
     environment:
@@ -16,20 +16,20 @@ services:
       - "traefik.enable=true"
       - "traefik.http.routers.web.rule=Host(`sber.levandrovskiy.ru`)"
 
-  caddy:
-    image: caddy:2-alpine
-    restart: always
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile
-      - caddy_data:/data
-      - caddy_config:/config
-    networks:
-      - app-network
-    depends_on:
-      - web
+  # caddy:
+  #   image: caddy:2-alpine
+  #   restart: always
+  #   ports:
+  #     - "80:80"
+  #     - "443:443"
+  #   volumes:
+  #     - ./Caddyfile:/etc/caddy/Caddyfile
+  #     - caddy_data:/data
+  #     - caddy_config:/config
+  #   networks:
+  #     - app-network
+  #   depends_on:
+  #     - web
 
   # ollama:
   #   image: docker.io/ollama/ollama:latest
