@@ -5,28 +5,12 @@ services:
     build: .
     restart: always
     ports:
-      - "8000:8000"
+      - "8080:8000"
     volumes:
       - .:/app
     environment:
-      - DATABASE_URL=postgresql://postgres:postgres@db:5432/threads_hack
+      - DATABASE_URL=postgresql://threaducation_user:threads_t0_masses@62.109.26.235:5432/education_db
       - PYTHONPATH=/app
-    depends_on:
-      - db
-    networks:
-      - app-network
-
-  db:
-    image: postgres:14
-    restart: always
-    volumes:
-      - postgres_data:/var/lib/postgresql/data/
-    environment:
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_USER=postgres
-      - POSTGRES_DB=threads_hack
-    ports:
-      - "5432:5432"
     networks:
       - app-network
 
@@ -39,9 +23,13 @@ services:
       - "11434:11434"
     networks:
       - app-network
+    command: >
+      sh -c "ollama serve &
+             sleep 10 &&
+             ollama pull gemma3 &&
+             tail -f /dev/null"
 
 volumes:
-  postgres_data:
   ollama_data:
 
 networks:
