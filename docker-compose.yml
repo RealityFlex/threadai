@@ -20,17 +20,10 @@ services:
       - "11434:11434"
     volumes:
       - ollama_data:/root/.ollama
+      - ./supervisord.conf:/etc/supervisord.conf
     networks:
       - app-network
-    entrypoint: ["/bin/bash", "-c"]
-    command: |
-      ollama serve &
-      echo "Ждем запуска сервера Ollama..."
-      while ! nc -z localhost 11434; do sleep 1; done
-      echo "Сервер запущен, загружаем модель gemma3..."
-      ollama pull gemma3
-      echo "Готово. Контейнер будет оставаться активным."
-      tail -f /dev/null
+    command: ["/usr/bin/supervisord", "-c", "/etc/supervisord.conf"]
 
 volumes:
   ollama_data:
