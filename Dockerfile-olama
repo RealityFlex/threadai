@@ -1,0 +1,9 @@
+FROM ollama/ollama
+
+RUN apt-get update && \
+    apt-get install -y bash supervisor && \
+    mkdir -p /var/log/supervisor
+
+COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+
+CMD ["/usr/bin/supervisord", "-n"]

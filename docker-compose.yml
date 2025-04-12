@@ -13,17 +13,17 @@ services:
       - app-network
 
   ollama:
-    image: ollama/ollama
+    build:
+      context: .
+      dockerfile: Dockerfile-olama
     container_name: ollama
     restart: always
     ports:
       - "11434:11434"
     volumes:
       - ollama_data:/root/.ollama
-      - ./supervisord.conf:/etc/supervisord.conf
     networks:
       - app-network
-    command: ["/usr/bin/supervisord", "-c", "/etc/supervisord.conf"]
 
 volumes:
   ollama_data:
