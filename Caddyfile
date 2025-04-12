@@ -1,6 +1,4 @@
 sber.levandrovskiy.ru {
-    # Автоматически получить и настроить SSL-сертификат Let's Encrypt
-    tls internal
 
     # Логирование
     log {
@@ -17,22 +15,5 @@ sber.levandrovskiy.ru {
         header_up X-Real-IP {remote}
         header_up X-Forwarded-For {remote}
         header_up X-Forwarded-Proto {scheme}
-    }
-
-    # Включить сжатие для уменьшения размера передаваемых данных
-    encode gzip
-    
-    # Базовые настройки безопасности
-    header {
-        # Включаем HSTS
-        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
-        # Защита от кликджекинга
-        X-Frame-Options "SAMEORIGIN"
-        # Защита от XSS
-        X-XSS-Protection "1; mode=block"
-        # Защита от снифинга MIME-типов
-        X-Content-Type-Options "nosniff"
-        # Запрет на информацию о сервере
-        -Server
     }
 } 
