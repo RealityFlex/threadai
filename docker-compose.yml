@@ -14,23 +14,22 @@ services:
 
   ollama:
     image: ollama/ollama
+    container_name: ollama
     restart: always
-    volumes:
-      - ollama_data:/root/.ollama
     ports:
       - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
     networks:
       - app-network
-    # Используем скрипт инициализации для загрузки модели после запуска сервера
     entrypoint: ["/bin/bash", "-c"]
     command: |
-      # Запускаем Ollama сервер
       ollama serve &
-      # Ждем, пока сервер запустится
-      sleep 15
-      # Загружаем модель gemma3
+      echo "Ждем запуска сервера Ollama..."
+      while ! nc -z localhost 11434; do sleep 1; done
+      echo "Сервер запущен, загружаем модель gemma3..."
       ollama pull gemma3
-      # Поддерживаем контейнер в рабочем состоянии
+      echo "Готово. Контейнер будет оставаться активным."
       tail -f /dev/null
 
 volumes:
