@@ -9,7 +9,6 @@ services:
     environment:
       - DATABASE_URL=postgresql://threaducation_user:threads_t0_masses@62.109.26.235:5432/education_db
       - PYTHONPATH=/app
-      - OLLAMA_API_URL=http://62.109.26.235:11434
     networks:
       - app-network
 
