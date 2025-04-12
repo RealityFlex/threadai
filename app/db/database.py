@@ -3,6 +3,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from dotenv import load_dotenv
+import re
 
 # Загружаем переменные окружения
 load_dotenv()
@@ -14,8 +15,18 @@ DATABASE_URL = os.getenv(
 )
 
 # Выводим информацию о подключении (без пароля) для отладки
-db_info = DATABASE_URL.split(":")
-print(f"Connecting to database: {db_info[0]}://{db_info[1].split('@')[0].split(':')[0]}@{db_info[1].split('@')[1]}")
+try:
+    # Используем регулярное выражение для безопасного парсинга строки подключения
+    pattern = r"(.*?)://(.*?):(.*?)@(.*)"
+    match = re.match(pattern, DATABASE_URL)
+    if match:
+        protocol, username, _, host_info = match.groups()
+        print(f"Connecting to database: {protocol}://{username}@{host_info}")
+    else:
+        print(f"Connecting to database: {DATABASE_URL}")
+except Exception as e:
+    # В случае ошибки парсинга просто выводим сообщение без деталей
+    print(f"Connecting to database (URL parsing error: {str(e)})")
 
 # Создание движка SQLAlchemy
 engine = create_engine(DATABASE_URL)
