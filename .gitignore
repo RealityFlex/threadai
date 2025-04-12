@@ -1,0 +1,73 @@
+# Байткод Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Дистрибутивы
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Виртуальные окружения
+venv/
+env/
+ENV/
+
+# Файлы unit тестов и покрытия
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+
+# Документация
+docs/_build/
+
+# Переменные среды
+.env
+.venv
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.project
+.pydevproject
+.settings
+
+# База данных для разработки
+*.db
+*.sqlite3
+
+# Логи
+*.log
+
+# Временные файлы
+tmp/
+.DS_Store
+
+# Файлы изображений для загрузки (при необходимости можно закомментировать)
+# diploms/
+# uploads/
+
+# Модели Ollama (большие файлы)
+*.gguf 
