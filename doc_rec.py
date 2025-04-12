@@ -11,6 +11,16 @@ from app.models.models import User, DocumentEvaluation
 import math
 import time
 from typing import Optional
+from dotenv import load_dotenv
+
+# Загружаем переменные окружения
+load_dotenv()
+
+# Получаем URL API Ollama из переменных окружения или используем значение по умолчанию
+OLLAMA_API_URL = os.getenv("OLLAMA_API_URL", "http://localhost:11434")
+
+# Настраиваем клиент Ollama
+ollama.set_host(OLLAMA_API_URL)
 
 router = APIRouter()
 
@@ -29,6 +39,9 @@ def evaluate_document(image_path):
         return {"error": "Файл не найден"}
     
     try:
+        # Логируем адрес API для отладки
+        print(f"Отправляем запрос к Ollama API по адресу: {OLLAMA_API_URL}")
+        
         # Отправляем запрос к модели
         res = ollama.chat(
             model="gemma3",

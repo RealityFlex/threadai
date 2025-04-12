@@ -9,18 +9,19 @@ services:
     environment:
       - DATABASE_URL=postgresql://threaducation_user:threads_t0_masses@62.109.26.235:5432/education_db
       - PYTHONPATH=/app
+      - OLLAMA_API_URL=http://62.109.26.235:11434
     networks:
       - app-network
 
-  ollama:
-    image: docker.io/ollama/ollama:latest
-    restart: always
-    volumes:
-      - ollama_data:/root/.ollama
-    ports:
-      - "11434:11434"
-    networks:
-      - app-network
+  # ollama:
+  #   image: docker.io/ollama/ollama:latest
+  #   restart: always
+  #   volumes:
+  #     - ollama_data:/root/.ollama
+  #   ports:
+  #     - "11434:11434"
+  #   networks:
+  #     - app-network
 
 volumes:
   ollama_data:
