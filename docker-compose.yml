@@ -13,7 +13,7 @@ services:
       - app-network
 
   ollama:
-    image: ollama/ollama
+    image: docker.io/ollama/ollama:latest
     restart: always
     volumes:
       - ollama_data:/root/.ollama
