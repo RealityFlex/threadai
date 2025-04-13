@@ -6,6 +6,7 @@ services:
       - "8080:8000"
     volumes:
       - .:/app
+      - uploaded_media:/app/uploads
     environment:
       - DATABASE_URL=postgresql://threaducation_user:threads_t0_masses@62.109.26.235:5432/education_db
       - PYTHONPATH=/app
@@ -23,6 +24,7 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile
       - caddy_data:/data
       - caddy_config:/config
+      - uploaded_media:/app/uploads
     depends_on:
       - web
 
@@ -40,6 +42,7 @@ volumes:
   ollama_data:
   caddy_data:
   caddy_config:
+  uploaded_media:
 
 # networks:
 #   app-network:

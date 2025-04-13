@@ -6,6 +6,8 @@ from sqlalchemy.exc import SQLAlchemyError
 from pydantic import ValidationError
 import doc_rec
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+import os
 
 from app.utils.exception_handlers import (
     sqlalchemy_exception_handler,
@@ -14,6 +16,9 @@ from app.utils.exception_handlers import (
 )
 from app.utils.middleware import LoggingMiddleware
 from app.db.database import Base, engine
+
+# Создаем директорию для изображений, если ее нет
+os.makedirs("uploads/images", exist_ok=True)
 
 # Создаем все таблицы, если они не существуют
 # В реальном приложении это лучше делать через миграции
@@ -24,6 +29,9 @@ app = FastAPI(
     description="API для работы с постами и комментариями",
     version="1.0.0"
 )
+
+# Монтируем статические файлы для изображений
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 # Настройка CORS для всех доменов
 app.add_middleware(
@@ -52,6 +60,6 @@ async def health_check():
     """Проверка работоспособности API"""
     return {"status": "ok"}
 
-# if __name__ == "__main__":
-#     uvicorn.run("main:app", host="0.0.0.0", port=8000)
+if __name__ == "__main__":
+    uvicorn.run("main:app", host="0.0.0.0", port=8000)
 

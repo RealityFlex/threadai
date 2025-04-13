@@ -8,12 +8,23 @@ sber.levandrovskiy.ru {
         }
     }
 
-    # Проксирование запросов к FastAPI приложению
-    reverse_proxy web:8000 {
-        # Настройки прокси
-        header_up Host {host}
-        header_up X-Real-IP {remote}
-        header_up X-Forwarded-For {remote}
-        header_up X-Forwarded-Proto {scheme}
+    # Настройка для статических файлов
+    handle /uploads/* {
+        root * /app
+        file_server
     }
+
+    # Проксирование запросов к FastAPI приложению
+    handle {
+        reverse_proxy web:8000 {
+            # Настройки прокси
+            header_up Host {host}
+            header_up X-Real-IP {remote}
+            header_up X-Forwarded-For {remote}
+            header_up X-Forwarded-Proto {scheme}
+        }
+    }
+
+    # Включить сжатие для уменьшения размера передаваемых данных
+    encode gzip
 } 

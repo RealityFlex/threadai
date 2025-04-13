@@ -7,6 +7,8 @@ import os
 import logging
 from collections import Counter
 from datetime import datetime, timedelta
+from fastapi import UploadFile, HTTPException
+from app.utils.image_handler import ImageHandler
 
 # Добавляем корневую директорию проекта в sys.path для импорта tokens.py
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
@@ -17,7 +19,7 @@ logger = logging.getLogger("app")
 
 class PostService:
     @staticmethod
-    def create_post(db: Session, post_data: PostCreate):
+    async def create_post(db: Session, post_data: PostCreate, image: UploadFile = None):
         try:
             # Проверяем существование пользователя
             user = db.query(User).filter(User.user_id == post_data.user_id).first()
@@ -38,6 +40,18 @@ class PostService:
                     logger.error(f"Попытка создать комментарий к несуществующему посту ID={post_data.child_id}")
                     raise ValueError(f"Родительский пост с ID {post_data.child_id} не существует")
             
+            # Обрабатываем изображение, если оно предоставлено
+            media_link = post_data.media_link
+            if image:
+                # Сохраняем изображение и получаем путь к нему
+                success, file_path, error_message = ImageHandler.save_image(image, prefix="post_")
+                if not success:
+                    logger.error(f"Ошибка при сохранении изображения для поста: {error_message}")
+                    raise HTTPException(status_code=400, detail=error_message)
+                
+                # Заменяем ссылку на медиа-контент путем к сохраненному изображению
+                media_link = file_path
+            
             # Получаем максимальное значение post_id и прибавляем 1
             max_id = db.query(func.max(Post.post_id)).scalar() or 0
             next_id = max_id + 1
@@ -48,11 +62,10 @@ class PostService:
                 content=post_data.content,
                 child_id=post_data.child_id,
                 user_id=post_data.user_id,
-                media_link=post_data.media_link,
-                post_type_id=post_data.post_type_id,
-                creation_date=datetime.now()
+                media_link=media_link,
+                post_type_id=post_data.post_type_id
             )
-            print(datetime.now())
+            
             db.add(db_post)
             db.commit()
             db.refresh(db_post)
@@ -125,17 +138,83 @@ class PostService:
         return db.query(Post).filter(Post.child_id == post_id).order_by(Post.creation_date).offset(skip).limit(limit).all()
     
     @staticmethod
-    def update_post(db: Session, post_id: int, post_data: PostUpdate):
+    async def update_post(db: Session, post_id: int, post_data: PostUpdate, image: UploadFile = None):
         try:
             db_post = db.query(Post).filter(Post.post_id == post_id).first()
-            if db_post:
-                # Обновляем только переданные поля
-                for key, value in post_data.model_dump(exclude_unset=True).items():
-                    setattr(db_post, key, value)
+            if not db_post:
+                return None
+            
+            # Обрабатываем изображение, если оно предоставлено
+            if image:
+                # Если у поста уже есть изображение, удаляем его
+                if db_post.media_link and db_post.media_link.startswith("/uploads/images/"):
+                    ImageHandler.delete_image(db_post.media_link)
                 
-                db.commit()
-                db.refresh(db_post)
-                logger.info(f"Updated post ID: {post_id}")
+                # Сохраняем новое изображение и получаем путь к нему
+                success, file_path, error_message = ImageHandler.save_image(image, prefix="post_")
+                if not success:
+                    logger.error(f"Ошибка при сохранении изображения для поста {post_id}: {error_message}")
+                    raise HTTPException(status_code=400, detail=error_message)
+                
+                # Обновляем ссылку на медиа-контент
+                db_post.media_link = file_path
+            # Если передали новую ссылку на медиа, обновляем ее
+            elif post_data.media_link is not None:
+                # Если у поста уже есть изображение в нашей системе и его заменяют на внешнюю ссылку, удаляем старое изображение
+                if db_post.media_link and db_post.media_link.startswith("/uploads/images/") and not post_data.media_link.startswith("/uploads/images/"):
+                    ImageHandler.delete_image(db_post.media_link)
+                db_post.media_link = post_data.media_link
+            
+            # Обновляем остальные поля поста
+            if post_data.content is not None:
+                db_post.content = post_data.content
+                # Обновляем теги поста при изменении содержания
+                updated_tokens = extract_topic_tokens(post_data.content)
+                if updated_tokens:
+                    # Удаляем старые теги
+                    db.query(TagForPost).filter(TagForPost.post_id == post_id).delete()
+                    db.commit()
+                    
+                    # Создаем новые теги
+                    for token in updated_tokens:
+                        # Ищем тэг в БД или создаем новый
+                        tag = db.query(Tag).filter(Tag.name == token).first()
+                        if not tag:
+                            # По умолчанию используем тип 1
+                            max_tag_id = db.query(func.max(Tag.tag_id)).scalar() or 0
+                            next_tag_id = max_tag_id + 1
+                            
+                            tag = Tag(tag_id=next_tag_id, name=token, tag_type_id=1)
+                            db.add(tag)
+                            db.commit()
+                            db.refresh(tag)
+                        
+                        # Проверяем существование связи между постом и тегом
+                        existing_tag_for_post = db.query(TagForPost).filter(
+                            TagForPost.post_id == post_id,
+                            TagForPost.tag_id == tag.tag_id
+                        ).first()
+                        
+                        # Если связь уже существует, пропускаем
+                        if existing_tag_for_post:
+                            continue
+                            
+                        # Получаем максимальное значение id для TagForPost
+                        max_tag_post_id = db.query(func.max(TagForPost.id)).scalar() or 0
+                        next_tag_post_id = max_tag_post_id + 1
+                        
+                        # Связываем тэг с постом
+                        tag_for_post = TagForPost(
+                            id=next_tag_post_id,
+                            post_id=post_id, 
+                            tag_id=tag.tag_id
+                        )
+                        db.add(tag_for_post)
+                        db.commit()
+            
+            db.commit()
+            db.refresh(db_post)
+            logger.info(f"Updated post ID: {post_id}")
             return db_post
         except Exception as e:
             db.rollback()
@@ -147,6 +226,10 @@ class PostService:
         try:
             db_post = db.query(Post).filter(Post.post_id == post_id).first()
             if db_post:
+                # Удаляем изображение, если оно хранится в нашей системе
+                if db_post.media_link and db_post.media_link.startswith("/uploads/images/"):
+                    ImageHandler.delete_image(db_post.media_link)
+                
                 # Удаляем связанные данные
                 db.query(Like).filter(Like.post_id == post_id).delete()
                 db.query(TagForPost).filter(TagForPost.post_id == post_id).delete()

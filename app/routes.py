@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, File, UploadFile, Form
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from app.db.database import get_db
@@ -79,23 +79,51 @@ def get_users(db: Session = Depends(get_db)):
     return [{"id": u.user_id, "login": u.login, "name": u.name} for u in users]
 
 # Маршруты для постов
-@router.post("/posts/", response_model=Post, status_code=status.HTTP_201_CREATED, tags=["Посты"])
-def create_post(post: PostCreate, db: Session = Depends(get_db)):
+@router.post("/posts/", response_model=Post, tags=["Посты"])
+async def create_post(
+    content: str = Form(...),
+    user_id: int = Form(...),
+    child_id: Optional[int] = Form(None),
+    post_type_id: int = Form(...),
+    media_link: Optional[str] = Form(None),
+    image: Optional[UploadFile] = File(None),
+    db: Session = Depends(get_db)
+):
     """
     Создать новый пост.
     
-    Используется для создания нового поста. При создании автоматически генерируются 
-    тематические тэги на основе содержания поста.
+    Пост может быть основным или ответом на существующий пост (комментарием).
+    К посту можно прикрепить изображение или указать ссылку на медиа-контент.
     
-    - post_type_id должен быть 1 (для обычного поста)
-    - user_id должен соответствовать существующему пользователю
+    Если child_id не указан или передан как пустая строка, он будет установлен как None.
     """
     try:
-        return PostService.create_post(db=db, post_data=post)
+        # Преобразуем child_id к правильному типу (None, если передана пустая строка)
+        processed_child_id = None
+        if child_id and str(child_id).strip():
+            try:
+                processed_child_id = int(child_id)
+            except (ValueError, TypeError):
+                processed_child_id = None
+        
+        # Создаем объект PostCreate из данных формы
+        post_data = PostCreate(
+            content=content,
+            user_id=user_id,
+            child_id=processed_child_id,
+            post_type_id=post_type_id,
+            media_link=media_link
+        )
+        
+        # Создаем пост с изображением, если оно предоставлено
+        post = await PostService.create_post(db, post_data=post_data, image=image)
+        return post
     except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=str(e)
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Ошибка при создании поста: {str(e)}"
         )
 
 @router.get("/posts/", response_model=List[Post], tags=["Посты"])
@@ -122,16 +150,39 @@ def read_post(post_id: int, db: Session = Depends(get_db)):
     return post
 
 @router.put("/posts/{post_id}", response_model=Post, tags=["Посты"])
-def update_post(post_id: int, post_data: PostUpdate, db: Session = Depends(get_db)):
+async def update_post(
+    post_id: int,
+    content: Optional[str] = Form(None),
+    media_link: Optional[str] = Form(None),
+    image: Optional[UploadFile] = File(None),
+    db: Session = Depends(get_db)
+):
     """
-    Обновить пост.
+    Обновить существующий пост.
     
-    Позволяет обновить содержание и медиа-ссылку поста.
+    Можно обновить содержание поста и/или медиа-контент.
+    При загрузке нового изображения, старое изображение будет удалено.
     """
-    updated_post = PostService.update_post(db, post_id=post_id, post_data=post_data)
-    if updated_post is None:
-        raise HTTPException(status_code=404, detail="Пост не найден")
-    return updated_post
+    try:
+        # Создаем объект PostUpdate из данных формы
+        post_data = PostUpdate(
+            content=content,
+            media_link=media_link
+        )
+        
+        # Обновляем пост с изображением, если оно предоставлено
+        post = await PostService.update_post(db, post_id=post_id, post_data=post_data, image=image)
+        if not post:
+            raise HTTPException(status_code=404, detail=f"Пост с ID {post_id} не найден")
+        return post
+    except HTTPException:
+        # Проксируем HTTPException из сервиса
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Ошибка при обновлении поста: {str(e)}"
+        )
 
 @router.delete("/posts/{post_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Посты"])
 def delete_post(post_id: int, db: Session = Depends(get_db)):
