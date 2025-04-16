@@ -86,7 +86,7 @@ async def create_post(
     child_id: Optional[int] = Form(None),
     post_type_id: int = Form(...),
     media_link: Optional[str] = Form(None),
-    image: Optional[UploadFile] = File(None),
+    image: Optional[UploadFile] = File(default=None),
     db: Session = Depends(get_db)
 ):
     """
@@ -154,7 +154,7 @@ async def update_post(
     post_id: int,
     content: Optional[str] = Form(None),
     media_link: Optional[str] = Form(None),
-    image: Optional[UploadFile] = File(None),
+    image: Optional[UploadFile] = File(default=None),
     db: Session = Depends(get_db)
 ):
     """
@@ -198,20 +198,37 @@ def delete_post(post_id: int, db: Session = Depends(get_db)):
 
 # Маршруты для комментариев
 @router.post("/comments/", response_model=Comment, status_code=status.HTTP_201_CREATED, tags=["Комментарии"])
-def create_comment(comment: CommentCreate, db: Session = Depends(get_db)):
+async def create_comment(
+    content: str = Form(...),
+    user_id: int = Form(...),
+    child_id: int = Form(...),
+    media_link: Optional[str] = Form(None),
+    image: Optional[UploadFile] = File(default=None),
+    db: Session = Depends(get_db)
+):
     """
     Создать комментарий.
     
     Комментарий - это особый тип поста, который имеет родительский пост или комментарий.
     
-    - post_type_id всегда должен быть 2 (для комментария)
+    - post_type_id всегда равен 2 (для комментария)
     - child_id должен указывать на существующий пост или комментарий
     - user_id должен соответствовать существующему пользователю
+    - Может содержать изображение
     """
     try:
-        # Устанавливаем для комментария тип 2 (комментарий)
-        comment.post_type_id = 2
-        return PostService.create_post(db=db, post_data=comment)
+        # Создаем объект CommentCreate из данных формы
+        comment = CommentCreate(
+            content=content,
+            user_id=user_id,
+            child_id=child_id,
+            post_type_id=2,
+            media_link=media_link
+        )
+        
+        # Создаем комментарий с изображением, если оно предоставлено
+        post = await PostService.create_post(db=db, post_data=comment, image=image)
+        return post
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,

@@ -507,148 +507,118 @@ class PostService:
             raise
 
     @staticmethod
-    def get_recommended_posts(db: Session, user_id: int, skip: int = 0, limit: int = 10):
+    def get_recommended_posts(db: Session, user_id: int, limit: int = 10):
         """
-        Получает рекомендованные посты для пользователя на основе его интересов (тегов).
-        
-        Алгоритм рекомендаций основан на следующих факторах:
-        1. Совпадение тегов с интересами пользователя
-        2. Популярность постов (количество лайков)
-        3. Новизна постов (недавно созданные)
-        4. Исключение постов, которые пользователь уже лайкнул
-        
-        Система всегда возвращает посты, даже если нет точных совпадений по тегам.
-        
-        Args:
-            db (Session): Сессия базы данных
-            user_id (int): ID пользователя
-            skip (int): Сколько постов пропустить
-            limit (int): Сколько постов вернуть
-            
-        Returns:
-            list: Список рекомендованных постов
+        Получает рекомендованные посты для пользователя с учетом его интересов и популярности постов.
         """
         try:
-            # Получаем ID постов, которые пользователь уже лайкнул
-            liked_post_ids = db.query(Like.post_id).filter(Like.user_id == user_id).all()
-            liked_post_ids = [post_id[0] for post_id in liked_post_ids]
+            # Получаем теги пользователя
+            user_tags = db.query(Tag).join(TagForUser).filter(TagForUser.user_id == user_id).all()
+            user_tag_ids = [tag.tag_id for tag in user_tags]
             
-            # Формируем базовый запрос для постов, которые можно рекомендовать
-            base_query = db.query(Post).filter(
-                Post.child_id.is_(None),  # Только основные посты, не комментарии
-                Post.post_type_id == 1,   # Только посты (не комментарии и не репосты)
-                Post.user_id != user_id   # Исключаем посты самого пользователя
+            # Получаем посты, которые пользователь уже лайкнул
+            liked_posts = db.query(Like.post_id).filter(Like.user_id == user_id).all()
+            liked_post_ids = [post_id for (post_id,) in liked_posts]
+            
+            # Получаем все посты с тегами
+            posts_query = db.query(Post).join(TagForPost).join(Tag).filter(
+                Post.child_id.is_(None),  # Только основные посты
+                Post.post_type_id == 1,   # Только посты (не комментарии)
+                ~Post.post_id.in_(liked_post_ids)  # Исключаем посты, которые пользователь уже лайкнул
             )
             
-            # Исключаем посты, которые пользователь уже лайкнул
-            if liked_post_ids:
-                base_query = base_query.filter(~Post.post_id.in_(liked_post_ids))
-            
-            # Получаем теги пользователя (его интересы)
-            user_tag_ids = db.query(TagForUser.tag_id).filter(TagForUser.user_id == user_id).all()
-            user_tag_ids = [tag_id[0] for tag_id in user_tag_ids]
-            
-            # Если у пользователя нет тегов, обновляем их на основе лайков
-            if not user_tag_ids:
-                PostService.update_user_tags_from_likes(db, user_id)
-                user_tag_ids = db.query(TagForUser.tag_id).filter(TagForUser.user_id == user_id).all()
-                user_tag_ids = [tag_id[0] for tag_id in user_tag_ids]
-            
-            # Начинаем формировать список рекомендованных постов
-            recommended_posts = []
-            
-            # Если у пользователя есть теги, сначала находим посты, соответствующие его интересам
+            # Если у пользователя есть теги, добавляем фильтр по тегам
             if user_tag_ids:
-                # Находим посты с совпадающими тегами
-                tagged_posts_query = base_query.join(
-                    TagForPost, Post.post_id == TagForPost.post_id
-                ).filter(
-                    TagForPost.tag_id.in_(user_tag_ids)
-                ).distinct()
-                
-                # Вычисляем "рейтинг" поста путем подсчета количества совпадающих тегов
-                subquery = db.query(
-                    TagForPost.post_id,
-                    func.count(TagForPost.tag_id).label('matching_tags')
-                ).filter(
-                    TagForPost.tag_id.in_(user_tag_ids)
-                ).group_by(TagForPost.post_id).subquery()
-                
-                # Получаем количество лайков для каждого поста
-                likes_count_subquery = db.query(
-                    Like.post_id,
-                    func.count(Like.like_id).label('likes_count')
-                ).group_by(Like.post_id).subquery()
-                
-                # Объединяем данные и вычисляем итоговый рейтинг
-                tagged_posts = db.query(
-                    Post,
-                    subquery.c.matching_tags,
-                    func.coalesce(likes_count_subquery.c.likes_count, 0).label('likes_count')
-                ).outerjoin(
-                    subquery, Post.post_id == subquery.c.post_id
-                ).outerjoin(
-                    likes_count_subquery, Post.post_id == likes_count_subquery.c.post_id
-                ).filter(
-                    Post.post_id.in_([p.post_id for p in tagged_posts_query])
-                ).order_by(
-                    # Сначала сортируем по количеству совпадающих тегов
-                    desc(subquery.c.matching_tags),
-                    # Затем по новизне (чем новее, тем выше)
-                    desc(Post.creation_date),
-                    # И наконец по популярности
-                    desc(func.coalesce(likes_count_subquery.c.likes_count, 0))
-                ).offset(skip).limit(limit).all()
-                
-                # Добавляем посты с совпадающими тегами в начало списка рекомендаций
-                recommended_posts.extend([post for post, _, _ in tagged_posts])
+                posts_query = posts_query.filter(Tag.tag_id.in_(user_tag_ids))
             
-            # Если не хватает постов с тегами, добавляем самые популярные и новые посты
-            if len(recommended_posts) < limit:
-                # Определяем, сколько еще постов нужно добавить
-                remaining_limit = limit - len(recommended_posts)
-                remaining_skip = max(0, skip - len(recommended_posts))
-                
-                # Исключаем уже добавленные посты
-                existing_post_ids = [post.post_id for post in recommended_posts]
-                popular_posts_query = base_query
-                
-                if existing_post_ids:
-                    popular_posts_query = popular_posts_query.filter(~Post.post_id.in_(existing_post_ids))
-                
-                # Получаем популярные и новые посты, которые еще не вошли в рекомендации
-                popular_posts = popular_posts_query.outerjoin(Like).group_by(Post.post_id).order_by(
-                    func.count(Like.like_id).desc(),  # Сначала по количеству лайков
-                    desc(Post.creation_date)          # Затем по новизне
-                ).offset(remaining_skip).limit(remaining_limit).all()
-                
-                # Добавляем популярные посты в конец списка рекомендаций
-                recommended_posts.extend(popular_posts)
+            # Получаем посты, упорядоченные по дате создания
+            posts = posts_query.order_by(desc(Post.creation_date)).limit(limit).all()
             
-            # Если рекомендации все равно пусты, добавляем случайные посты
-            if not recommended_posts:
-                # Получаем случайные посты в системе
-                random_posts = base_query.order_by(func.random()).limit(limit).all()
-                recommended_posts.extend(random_posts)
+            # Если постов с тегами пользователя недостаточно, добавляем популярные посты
+            if len(posts) < limit:
+                remaining_limit = limit - len(posts)
+                popular_posts = db.query(Post).join(Like).filter(
+                    Post.child_id.is_(None),
+                    Post.post_type_id == 1,
+                    ~Post.post_id.in_(liked_post_ids),
+                    ~Post.post_id.in_([p.post_id for p in posts])  # Исключаем уже выбранные посты
+                ).group_by(Post.post_id).order_by(func.count(Like.like_id).desc()).limit(remaining_limit).all()
+                
+                posts.extend(popular_posts)
             
-            # Возвращаем итоговый список рекомендаций
-            return recommended_posts
-        
+            # Получаем детальную информацию о постах
+            posts_with_details = []
+            for post in posts:
+                # Получаем количество лайков
+                likes_count = db.query(func.count(Like.like_id)).filter(Like.post_id == post.post_id).scalar()
+                
+                # Получаем теги поста
+                tags = db.query(Tag).join(TagForPost).filter(TagForPost.post_id == post.post_id).all()
+                
+                # Получаем комментарии первого уровня
+                comments = db.query(Post).filter(Post.child_id == post.post_id).order_by(Post.creation_date).all()
+                
+                # Формируем структуру комментариев с вложенными ответами
+                def get_comment_replies(comment_id):
+                    replies = db.query(Post).filter(Post.child_id == comment_id).order_by(Post.creation_date).all()
+                    replies_with_nested = []
+                    
+                    for reply in replies:
+                        sub_replies = get_comment_replies(reply.post_id)
+                        reply_dict = {
+                            "post_id": reply.post_id,
+                            "content": reply.content,
+                            "child_id": reply.child_id,
+                            "user_id": reply.user_id,
+                            "media_link": reply.media_link,
+                            "creation_date": reply.creation_date,
+                            "views_count": reply.views_count,
+                            "post_type_id": reply.post_type_id,
+                            "replies": sub_replies
+                        }
+                        replies_with_nested.append(reply_dict)
+                    
+                    return replies_with_nested
+                
+                # Формируем список комментариев с вложенными ответами
+                comments_with_replies = []
+                for comment in comments:
+                    replies = get_comment_replies(comment.post_id)
+                    comment_dict = {
+                        "post_id": comment.post_id,
+                        "content": comment.content,
+                        "child_id": comment.child_id,
+                        "user_id": comment.user_id,
+                        "media_link": comment.media_link,
+                        "creation_date": comment.creation_date,
+                        "views_count": comment.views_count,
+                        "post_type_id": comment.post_type_id,
+                        "replies": replies
+                    }
+                    comments_with_replies.append(comment_dict)
+                
+                # Формируем детальную информацию о посте
+                post_dict = {
+                    "post_id": post.post_id,
+                    "content": post.content,
+                    "child_id": post.child_id,
+                    "user_id": post.user_id,
+                    "media_link": post.media_link,
+                    "creation_date": post.creation_date,
+                    "views_count": post.views_count,
+                    "post_type_id": post.post_type_id,
+                    "likes_count": likes_count,
+                    "tags": tags,
+                    "comments": comments_with_replies
+                }
+                
+                posts_with_details.append(post_dict)
+            
+            return posts_with_details
+            
         except Exception as e:
-            logger.error(f"Error getting recommended posts for user ID {user_id}: {str(e)}")
-            
-            # В случае ошибки все равно пытаемся вернуть какие-то посты
-            try:
-                # Получаем самые новые посты
-                fallback_posts = db.query(Post).filter(
-                    Post.child_id.is_(None),  # Только основные посты, не комментарии
-                    Post.post_type_id == 1    # Только посты (не комментарии и не репосты)
-                ).order_by(desc(Post.creation_date)).limit(limit).all()
-                
-                return fallback_posts
-            except:
-                # Если и это не получается, возвращаем пустой список
-                return []
+            logger.error(f"Error getting recommended posts: {str(e)}")
+            raise
 
     @staticmethod
     def get_user_details(db: Session, user_id: int):
@@ -700,4 +670,90 @@ class PostService:
             return user_details
         except Exception as e:
             logger.error(f"Error getting user details for user ID {user_id}: {str(e)}")
+            raise
+
+    @staticmethod
+    def get_posts_with_details(db: Session, skip: int = 0, limit: int = 100):
+        """
+        Получает список постов с детальной информацией о лайках и комментариях.
+        """
+        try:
+            # Получаем базовый список постов
+            posts = db.query(Post).filter(
+                Post.child_id.is_(None),  # Только основные посты
+                Post.post_type_id == 1    # Только посты (не комментарии)
+            ).order_by(desc(Post.creation_date)).offset(skip).limit(limit).all()
+            
+            # Для каждого поста получаем детальную информацию
+            posts_with_details = []
+            for post in posts:
+                # Получаем количество лайков
+                likes_count = db.query(func.count(Like.like_id)).filter(Like.post_id == post.post_id).scalar()
+                
+                # Получаем теги поста
+                tags = db.query(Tag).join(TagForPost).filter(TagForPost.post_id == post.post_id).all()
+                
+                # Получаем комментарии первого уровня
+                comments = db.query(Post).filter(Post.child_id == post.post_id).order_by(Post.creation_date).all()
+                
+                # Формируем структуру комментариев с вложенными ответами
+                def get_comment_replies(comment_id):
+                    replies = db.query(Post).filter(Post.child_id == comment_id).order_by(Post.creation_date).all()
+                    replies_with_nested = []
+                    
+                    for reply in replies:
+                        sub_replies = get_comment_replies(reply.post_id)
+                        reply_dict = {
+                            "post_id": reply.post_id,
+                            "content": reply.content,
+                            "child_id": reply.child_id,
+                            "user_id": reply.user_id,
+                            "media_link": reply.media_link,
+                            "creation_date": reply.creation_date,
+                            "views_count": reply.views_count,
+                            "post_type_id": reply.post_type_id,
+                            "replies": sub_replies
+                        }
+                        replies_with_nested.append(reply_dict)
+                    
+                    return replies_with_nested
+                
+                # Формируем список комментариев с вложенными ответами
+                comments_with_replies = []
+                for comment in comments:
+                    replies = get_comment_replies(comment.post_id)
+                    comment_dict = {
+                        "post_id": comment.post_id,
+                        "content": comment.content,
+                        "child_id": comment.child_id,
+                        "user_id": comment.user_id,
+                        "media_link": comment.media_link,
+                        "creation_date": comment.creation_date,
+                        "views_count": comment.views_count,
+                        "post_type_id": comment.post_type_id,
+                        "replies": replies
+                    }
+                    comments_with_replies.append(comment_dict)
+                
+                # Формируем детальную информацию о посте
+                post_dict = {
+                    "post_id": post.post_id,
+                    "content": post.content,
+                    "child_id": post.child_id,
+                    "user_id": post.user_id,
+                    "media_link": post.media_link,
+                    "creation_date": post.creation_date,
+                    "views_count": post.views_count,
+                    "post_type_id": post.post_type_id,
+                    "likes_count": likes_count,
+                    "tags": tags,
+                    "comments": comments_with_replies
+                }
+                
+                posts_with_details.append(post_dict)
+            
+            return posts_with_details
+            
+        except Exception as e:
+            logger.error(f"Error getting posts with details: {str(e)}")
             raise 
