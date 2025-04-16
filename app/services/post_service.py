@@ -131,7 +131,89 @@ class PostService:
     
     @staticmethod
     def get_posts(db: Session, skip: int = 0, limit: int = 100):
-        return db.query(Post).filter(Post.child_id.is_(None)).order_by(desc(Post.creation_date)).offset(skip).limit(limit).all()
+        """
+        Получает список постов с информацией о лайках и комментариях.
+        """
+        try:
+            # Получаем базовый список постов
+            posts = db.query(Post).filter(
+                Post.child_id.is_(None),  # Только основные посты
+                Post.post_type_id == 1    # Только посты (не комментарии)
+            ).order_by(desc(Post.creation_date)).offset(skip).limit(limit).all()
+            
+            # Для каждого поста получаем детальную информацию
+            posts_with_details = []
+            for post in posts:
+                # Получаем количество лайков
+                likes_count = db.query(func.count(Like.like_id)).filter(Like.post_id == post.post_id).scalar()
+                
+                # Получаем теги поста
+                tags = db.query(Tag).join(TagForPost).filter(TagForPost.post_id == post.post_id).all()
+                
+                # Получаем комментарии первого уровня
+                comments = db.query(Post).filter(Post.child_id == post.post_id).order_by(Post.creation_date).all()
+                
+                # Формируем структуру комментариев с вложенными ответами
+                def get_comment_replies(comment_id):
+                    replies = db.query(Post).filter(Post.child_id == comment_id).order_by(Post.creation_date).all()
+                    replies_with_nested = []
+                    
+                    for reply in replies:
+                        sub_replies = get_comment_replies(reply.post_id)
+                        reply_dict = {
+                            "post_id": reply.post_id,
+                            "content": reply.content,
+                            "child_id": reply.child_id,
+                            "user_id": reply.user_id,
+                            "media_link": reply.media_link,
+                            "creation_date": reply.creation_date,
+                            "views_count": reply.views_count,
+                            "post_type_id": reply.post_type_id,
+                            "replies": sub_replies
+                        }
+                        replies_with_nested.append(reply_dict)
+                    
+                    return replies_with_nested
+                
+                # Формируем список комментариев с вложенными ответами
+                comments_with_replies = []
+                for comment in comments:
+                    replies = get_comment_replies(comment.post_id)
+                    comment_dict = {
+                        "post_id": comment.post_id,
+                        "content": comment.content,
+                        "child_id": comment.child_id,
+                        "user_id": comment.user_id,
+                        "media_link": comment.media_link,
+                        "creation_date": comment.creation_date,
+                        "views_count": comment.views_count,
+                        "post_type_id": comment.post_type_id,
+                        "replies": replies
+                    }
+                    comments_with_replies.append(comment_dict)
+                
+                # Формируем детальную информацию о посте
+                post_dict = {
+                    "post_id": post.post_id,
+                    "content": post.content,
+                    "child_id": post.child_id,
+                    "user_id": post.user_id,
+                    "media_link": post.media_link,
+                    "creation_date": post.creation_date,
+                    "views_count": post.views_count,
+                    "post_type_id": post.post_type_id,
+                    "likes_count": likes_count,
+                    "tags": tags,
+                    "comments": comments_with_replies
+                }
+                
+                posts_with_details.append(post_dict)
+            
+            return posts_with_details
+            
+        except Exception as e:
+            logger.error(f"Error getting posts: {str(e)}")
+            raise
     
     @staticmethod
     def get_comments(db: Session, post_id: int, skip: int = 0, limit: int = 100):
@@ -507,7 +589,7 @@ class PostService:
             raise
 
     @staticmethod
-    def get_recommended_posts(db: Session, user_id: int, limit: int = 10):
+    def get_recommended_posts(db: Session, user_id: int, skip: int = 0, limit: int = 10):
         """
         Получает рекомендованные посты для пользователя с учетом его интересов и популярности постов.
         """
@@ -532,7 +614,7 @@ class PostService:
                 posts_query = posts_query.filter(Tag.tag_id.in_(user_tag_ids))
             
             # Получаем посты, упорядоченные по дате создания
-            posts = posts_query.order_by(desc(Post.creation_date)).limit(limit).all()
+            posts = posts_query.order_by(desc(Post.creation_date)).offset(skip).limit(limit).all()
             
             # Если постов с тегами пользователя недостаточно, добавляем популярные посты
             if len(posts) < limit:
