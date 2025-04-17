@@ -132,18 +132,18 @@ class PostService:
     @staticmethod
     def get_posts(db: Session, skip: int = 0, limit: int = 100):
         """
-        Получает список постов с информацией о лайках и комментариях.
+        Получает список постов с информацией о пользователе, лайках и комментариях.
         """
         try:
-            # Получаем базовый список постов
-            posts = db.query(Post).filter(
+            # Получаем базовый список постов с информацией о пользователе
+            posts = db.query(Post, User).join(User).filter(
                 Post.child_id.is_(None),  # Только основные посты
                 Post.post_type_id == 1    # Только посты (не комментарии)
             ).order_by(desc(Post.creation_date)).offset(skip).limit(limit).all()
             
             # Для каждого поста получаем детальную информацию
             posts_with_details = []
-            for post in posts:
+            for post, user in posts:
                 # Получаем количество лайков
                 likes_count = db.query(func.count(Like.like_id)).filter(Like.post_id == post.post_id).scalar()
                 
@@ -198,6 +198,8 @@ class PostService:
                     "content": post.content,
                     "child_id": post.child_id,
                     "user_id": post.user_id,
+                    "user_name": user.name,
+                    "user_image": user.image_link,
                     "media_link": post.media_link,
                     "creation_date": post.creation_date,
                     "views_count": post.views_count,
@@ -602,8 +604,8 @@ class PostService:
             liked_posts = db.query(Like.post_id).filter(Like.user_id == user_id).all()
             liked_post_ids = [post_id for (post_id,) in liked_posts]
             
-            # Получаем все посты с тегами
-            posts_query = db.query(Post).join(TagForPost).join(Tag).filter(
+            # Получаем все посты с тегами и информацией о пользователе
+            posts_query = db.query(Post, User).join(User).join(TagForPost).join(Tag).filter(
                 Post.child_id.is_(None),  # Только основные посты
                 Post.post_type_id == 1,   # Только посты (не комментарии)
                 ~Post.post_id.in_(liked_post_ids)  # Исключаем посты, которые пользователь уже лайкнул
@@ -619,18 +621,18 @@ class PostService:
             # Если постов с тегами пользователя недостаточно, добавляем популярные посты
             if len(posts) < limit:
                 remaining_limit = limit - len(posts)
-                popular_posts = db.query(Post).join(Like).filter(
+                popular_posts = db.query(Post, User).join(User).join(Like).filter(
                     Post.child_id.is_(None),
                     Post.post_type_id == 1,
                     ~Post.post_id.in_(liked_post_ids),
-                    ~Post.post_id.in_([p.post_id for p in posts])  # Исключаем уже выбранные посты
-                ).group_by(Post.post_id).order_by(func.count(Like.like_id).desc()).limit(remaining_limit).all()
+                    ~Post.post_id.in_([p[0].post_id for p in posts])  # Исключаем уже выбранные посты
+                ).group_by(Post.post_id, User.user_id).order_by(func.count(Like.like_id).desc()).limit(remaining_limit).all()
                 
                 posts.extend(popular_posts)
             
             # Получаем детальную информацию о постах
             posts_with_details = []
-            for post in posts:
+            for post, user in posts:
                 # Получаем количество лайков
                 likes_count = db.query(func.count(Like.like_id)).filter(Like.post_id == post.post_id).scalar()
                 
@@ -685,6 +687,8 @@ class PostService:
                     "content": post.content,
                     "child_id": post.child_id,
                     "user_id": post.user_id,
+                    "user_name": user.name,
+                    "user_image": user.image_link,
                     "media_link": post.media_link,
                     "creation_date": post.creation_date,
                     "views_count": post.views_count,

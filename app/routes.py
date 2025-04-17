@@ -126,12 +126,12 @@ async def create_post(
             detail=f"Ошибка при создании поста: {str(e)}"
         )
 
-@router.get("/posts/", response_model=List[Post], tags=["Посты"])
+@router.get("/posts/", response_model=List[PostDetail], tags=["Посты"])
 def read_posts(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     """
     Получить список постов.
     
-    Возвращает пагинированный список постов.
+    Возвращает пагинированный список постов с информацией о пользователе, лайках и комментариях.
     """
     posts = PostService.get_posts(db, skip=skip, limit=limit)
     return posts
@@ -275,7 +275,7 @@ def delete_like(post_id: int, user_id: int, db: Session = Depends(get_db)):
     return {"detail": "Лайк успешно удален"}
 
 # Маршруты для рекомендаций и тегов пользователя
-@router.get("/users/{user_id}/recommended-posts", response_model=List[Post], tags=["Рекомендации"])
+@router.get("/users/{user_id}/recommended-posts", response_model=List[PostDetail], tags=["Рекомендации"])
 def get_recommended_posts(user_id: int, skip: int = 0, limit: int = 10, db: Session = Depends(get_db)):
     """
     Получить рекомендованные посты для пользователя.

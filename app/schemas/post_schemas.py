@@ -87,11 +87,13 @@ class CommentWithReplies(Comment):
     class Config:
         orm_mode = True
 
-# Обновляем PostDetail для включения комментариев
+# Обновляем PostDetail для включения комментариев и информации о пользователе
 class PostDetail(Post):
     likes_count: int
     tags: List[Tag] = []
     comments: List[CommentWithReplies] = []
+    user_name: str
+    user_image: Optional[str] = None
 
     class Config:
         orm_mode = True
