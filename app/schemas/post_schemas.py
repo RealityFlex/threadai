@@ -4,9 +4,17 @@ from datetime import datetime, date
 from fastapi import UploadFile
 
 # Базовые схемы
+class TagTypeBase(BaseModel):
+    type_id: int
+    name: str
+
+    class Config:
+        orm_mode = True
+
 class TagBase(BaseModel):
     name: str
     tag_type_id: int
+    tag_type: Optional[TagTypeBase] = None
 
 class TagCreate(TagBase):
     pass
