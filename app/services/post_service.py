@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import func, text, desc, and_, or_, distinct
-from app.models.models import Post, Like, TagForPost, Tag, User, PostType, TagForUser, ProfileType
+from app.models.models import Post, Like, TagForPost, Tag, User, PostType, TagForUser, ProfileType, TagType
 from app.schemas.post_schemas import PostCreate, PostUpdate, LikeCreate, CommentWithReplies
 import sys
 import os
@@ -643,8 +643,19 @@ class PostService:
                 # Получаем количество лайков
                 likes_count = db.query(func.count(Like.like_id)).filter(Like.post_id == post.post_id).scalar()
                 
-                # Получаем теги поста
-                tags = db.query(Tag).join(TagForPost).filter(TagForPost.post_id == post.post_id).all()
+                # Получаем теги поста с информацией о типе тега
+                tags = db.query(Tag, TagType).join(TagType).join(TagForPost).filter(TagForPost.post_id == post.post_id).all()
+                tags_with_type = [
+                    {
+                        "tag_id": tag.tag_id,
+                        "name": tag.name,
+                        "tag_type": {
+                            "type_id": tag_type.tag_type_id,
+                            "name": tag_type.name
+                        }
+                    }
+                    for tag, tag_type in tags
+                ]
                 
                 # Получаем комментарии первого уровня
                 comments = db.query(Post).filter(Post.child_id == post.post_id).order_by(Post.creation_date).all()
@@ -701,7 +712,7 @@ class PostService:
                     "views_count": post.views_count,
                     "post_type_id": post.post_type_id,
                     "likes_count": likes_count,
-                    "tags": tags,
+                    "tags": tags_with_type,
                     "comments": comments_with_replies
                 }
                 
@@ -798,8 +809,19 @@ class PostService:
                 # Получаем количество лайков
                 likes_count = db.query(func.count(Like.like_id)).filter(Like.post_id == post.post_id).scalar()
                 
-                # Получаем теги поста
-                tags = db.query(Tag).join(TagForPost).filter(TagForPost.post_id == post.post_id).all()
+                # Получаем теги поста с информацией о типе тега
+                tags = db.query(Tag, TagType).join(TagType).join(TagForPost).filter(TagForPost.post_id == post.post_id).all()
+                tags_with_type = [
+                    {
+                        "tag_id": tag.tag_id,
+                        "name": tag.name,
+                        "tag_type": {
+                            "type_id": tag_type.tag_type_id,
+                            "name": tag_type.name
+                        }
+                    }
+                    for tag, tag_type in tags
+                ]
                 
                 # Получаем комментарии первого уровня
                 comments = db.query(Post).filter(Post.child_id == post.post_id).order_by(Post.creation_date).all()
@@ -843,18 +865,23 @@ class PostService:
                     }
                     comments_with_replies.append(comment_dict)
                 
+                # Получаем информацию о пользователе
+                user = db.query(User).filter(User.user_id == post.user_id).first()
+                
                 # Формируем детальную информацию о посте
                 post_dict = {
                     "post_id": post.post_id,
                     "content": post.content,
                     "child_id": post.child_id,
                     "user_id": post.user_id,
+                    "user_name": user.name,
+                    "user_image": user.image_link,
                     "media_link": post.media_link,
                     "creation_date": post.creation_date,
                     "views_count": post.views_count,
                     "post_type_id": post.post_type_id,
                     "likes_count": likes_count,
-                    "tags": tags,
+                    "tags": tags_with_type,
                     "comments": comments_with_replies
                 }
                 

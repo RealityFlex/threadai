@@ -138,7 +138,7 @@ def read_posts(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     
     Возвращает пагинированный список постов с информацией о пользователе, лайках и комментариях.
     """
-    posts = PostService.get_posts(db, skip=skip, limit=limit)
+    posts = PostService.get_posts_with_details(db, skip=skip, limit=limit)
     return posts
 
 @router.get("/posts/{post_id}", response_model=PostDetail, tags=["Посты"])

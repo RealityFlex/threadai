@@ -19,8 +19,17 @@ class TagBase(BaseModel):
 class TagCreate(TagBase):
     pass
 
-class Tag(TagBase):
+class TagType(BaseModel):
+    type_id: int
+    name: str
+
+    class Config:
+        orm_mode = True
+
+class Tag(BaseModel):
     tag_id: int
+    name: str
+    tag_type: TagType
 
     class Config:
         orm_mode = True
