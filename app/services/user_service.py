@@ -7,6 +7,7 @@ from app.utils.image_handler import ImageHandler
 import logging
 import tempfile
 import os
+from typing import Optional
 
 logger = logging.getLogger("app")
 
@@ -180,62 +181,135 @@ class UserService:
             raise
 
     @staticmethod
-    async def update_user_avatar(db: Session, user_id: int, user_data: UserUpdateAvatar):
+    async def update_user_avatar(db: Session, user_id: int, image: bytes) -> Optional[User]:
         """
         Обновляет аватар пользователя.
         
         Args:
             db (Session): Сессия базы данных
             user_id (int): ID пользователя
-            user_data (UserUpdateAvatar): Новый аватар в бинарном формате
+            image (bytes): Бинарные данные изображения
             
         Returns:
-            User: Обновленный пользователь
+            Optional[User]: Обновленный пользователь или None, если пользователь не найден
         """
         try:
-            db_user = db.query(User).filter(User.user_id == user_id).first()
-            if not db_user:
+            # Получаем пользователя
+            user = db.query(User).filter(User.user_id == user_id).first()
+            if not user:
                 return None
             
-            # Если у пользователя уже есть аватар, удаляем его
-            if db_user.image_link and db_user.image_link.startswith("/uploads/avatars/"):
-                ImageHandler.delete_image(db_user.image_link)
+            # Создаем временный файл для изображения
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as temp_file:
+                temp_file.write(image)
+                temp_file_path = temp_file.name
             
-            # Создаем временный файл для обработки бинарных данных
-            with tempfile.NamedTemporaryFile(delete=False) as temp_file:
-                temp_file.write(user_data.image)
-                temp_file.flush()
-                
+            try:
                 # Создаем UploadFile из временного файла
                 upload_file = UploadFile(
-                    filename="avatar.jpg",
-                    file=open(temp_file.name, "rb")
+                    filename=f"avatar_{user_id}.png",
+                    file=open(temp_file_path, "rb")
                 )
                 
-                # Сохраняем изображение и получаем путь к нему
+                # Сохраняем изображение
                 success, file_path, error_message = ImageHandler.save_image(
                     upload_file, 
-                    prefix="avatar_", 
+                    prefix=f"avatar_{user_id}_",
                     directory="avatars"
                 )
                 
-                # Закрываем и удаляем временный файл
+                # Закрываем файл
                 upload_file.file.close()
-                os.unlink(temp_file.name)
                 
                 if not success:
-                    logger.error(f"Ошибка при сохранении аватара: {error_message}")
-                    raise HTTPException(status_code=400, detail=error_message)
+                    logger.error(f"Ошибка при сохранении аватара пользователя {user_id}: {error_message}")
+                    return None
+                
+                # Удаляем старый аватар, если он существует
+                if user.image_link and user.image_link.startswith("/uploads/avatars/"):
+                    ImageHandler.delete_image(user.image_link)
                 
                 # Обновляем ссылку на аватар
-                db_user.image_link = file_path
-            
-            db.commit()
-            db.refresh(db_user)
-            logger.info(f"Updated user avatar ID: {user_id}")
-            return db_user
-            
+                user.image_link = file_path
+                db.commit()
+                db.refresh(user)
+                
+                logger.info(f"Обновлен аватар пользователя {user_id}")
+                return user
+                
+            finally:
+                # Удаляем временный файл
+                if os.path.exists(temp_file_path):
+                    os.unlink(temp_file_path)
+                    
         except Exception as e:
             db.rollback()
-            logger.error(f"Error updating user avatar {user_id}: {str(e)}")
+            logger.error(f"Ошибка при обновлении аватара пользователя {user_id}: {str(e)}")
+            raise
+
+    @staticmethod
+    async def update_avatar(db: Session, user_id: int, image: bytes) -> Optional[User]:
+        """
+        Обновляет только аватар пользователя.
+        
+        Args:
+            db (Session): Сессия базы данных
+            user_id (int): ID пользователя
+            image (bytes): Бинарные данные изображения
+            
+        Returns:
+            Optional[User]: Обновленный пользователь или None, если пользователь не найден
+        """
+        try:
+            # Получаем пользователя
+            user = db.query(User).filter(User.user_id == user_id).first()
+            if not user:
+                return None
+            
+            # Создаем временный файл для изображения
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as temp_file:
+                temp_file.write(image)
+                temp_file_path = temp_file.name
+            
+            try:
+                # Создаем UploadFile из временного файла
+                upload_file = UploadFile(
+                    filename=f"avatar_{user_id}.png",
+                    file=open(temp_file_path, "rb")
+                )
+                
+                # Сохраняем изображение
+                success, file_path, error_message = ImageHandler.save_image(
+                    upload_file, 
+                    prefix=f"avatar_{user_id}_",
+                    directory="avatars"
+                )
+                
+                # Закрываем файл
+                upload_file.file.close()
+                
+                if not success:
+                    logger.error(f"Ошибка при сохранении аватара пользователя {user_id}: {error_message}")
+                    return None
+                
+                # Удаляем старый аватар, если он существует
+                if user.image_link and user.image_link.startswith("/uploads/avatars/"):
+                    ImageHandler.delete_image(user.image_link)
+                
+                # Обновляем ссылку на аватар
+                user.image_link = file_path
+                db.commit()
+                db.refresh(user)
+                
+                logger.info(f"Обновлен аватар пользователя {user_id}")
+                return user
+                
+            finally:
+                # Удаляем временный файл
+                if os.path.exists(temp_file_path):
+                    os.unlink(temp_file_path)
+                    
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Ошибка при обновлении аватара пользователя {user_id}: {str(e)}")
             raise 

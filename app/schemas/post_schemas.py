@@ -142,6 +142,12 @@ class UserDetail(UserBase):
     class Config:
         orm_mode = True
 
+    @validator('tags', pre=True)
+    def validate_tags(cls, v):
+        if v is None:
+            return []
+        return v
+
 class UserUpdateProfile(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
@@ -149,6 +155,15 @@ class UserUpdateProfile(BaseModel):
 
 class UserUpdateAvatar(BaseModel):
     image: bytes
+
+class UserAvatarResponse(BaseModel):
+    user_id: int
+    login: str
+    name: str
+    image_link: Optional[str] = None
+
+    class Config:
+        from_attributes = True
 
 # Разрешаем форвард-референс
 CommentWithReplies.update_forward_refs() 

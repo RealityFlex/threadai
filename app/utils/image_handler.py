@@ -93,22 +93,23 @@ class ImageHandler:
         Удаляет изображение по указанному пути.
         
         Args:
-            file_path (str): Путь к файлу (относительный, начинающийся с '/uploads/images/')
+            file_path (str): Путь к файлу (относительный, начинающийся с '/uploads/')
             
         Returns:
             bool: True если удаление успешно, False в противном случае
         """
         try:
-            # Проверяем, начинается ли путь с /uploads/images/
-            if not file_path.startswith("/uploads/images/"):
-                logger.error(f"Попытка удалить файл вне директории изображений: {file_path}")
+            # Проверяем, начинается ли путь с /uploads/
+            if not file_path.startswith("/uploads/"):
+                logger.error(f"Попытка удалить файл вне директории uploads: {file_path}")
                 return False
             
-            # Получаем имя файла
+            # Получаем имя файла и директорию
+            directory = file_path.split("/")[2]  # Получаем 'images' или 'avatars'
             filename = os.path.basename(file_path)
             
             # Полный путь к файлу
-            full_path = os.path.join(cls.UPLOAD_DIR, filename)
+            full_path = os.path.join(cls.UPLOAD_DIR, directory, filename)
             
             # Проверяем существование файла
             if not os.path.exists(full_path):

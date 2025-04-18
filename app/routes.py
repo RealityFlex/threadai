@@ -6,12 +6,16 @@ from app.services.post_service import PostService
 from app.schemas.post_schemas import (
     Post, PostCreate, PostUpdate, PostDetail, 
     Like, LikeCreate, Comment, CommentCreate, Tag,
-    UserDetail, UserCreate, UserUpdate, UserUpdateProfile, UserUpdateAvatar
+    UserDetail, UserCreate, UserUpdate, UserUpdateProfile, UserUpdateAvatar,
+    UserAvatarResponse
 )
 from app.utils.init_data import initialize_db
 from app.utils.create_test_user import create_test_user
 from app.models.models import User, PostType
 from app.services.user_service import UserService
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -77,7 +81,7 @@ def get_users(db: Session = Depends(get_db)):
     Полезно для выбора правильного user_id при создании поста.
     """
     users = db.query(User).all()
-    return [{"id": u.user_id, "login": u.login, "name": u.name} for u in users]
+    return [{"id": u.user_id, "login": u.login, "name": u.name, "image_link": u.image_link} for u in users]
 
 # Маршруты для постов
 @router.post("/posts/", response_model=Post, tags=["Посты"])
@@ -459,30 +463,25 @@ async def update_user_profile(
             detail=f"Ошибка при обновлении профиля пользователя: {str(e)}"
         )
 
-@router.put("/users/{user_id}/avatar", response_model=UserDetail, tags=["Пользователи"])
+@router.put("/users/{user_id}/avatar", response_model=UserAvatarResponse)
 async def update_user_avatar(
     user_id: int,
-    image: bytes = File(...),
+    image: UploadFile = File(...),
     db: Session = Depends(get_db)
 ):
     """
-    Обновить аватар пользователя.
-    
-    Принимает изображение в бинарном формате.
-    При загрузке нового аватара, старый будет автоматически удален.
-    Поддерживаемые форматы: JPG, JPEG, PNG, GIF, WEBP.
-    Максимальный размер файла: 10MB.
+    Обновляет аватар пользователя.
     """
     try:
-        user_data = UserUpdateAvatar(image=image)
-        user = await UserService.update_user_avatar(db, user_id=user_id, user_data=user_data)
-        if not user:
-            raise HTTPException(status_code=404, detail=f"Пользователь с ID {user_id} не найден")
-        return user
-    except HTTPException:
-        raise
+        # Читаем содержимое файла
+        image_data = await image.read()
+        
+        # Обновляем аватар
+        updated_user = await UserService.update_avatar(db, user_id, image_data)
+        if not updated_user:
+            raise HTTPException(status_code=404, detail="Пользователь не найден")
+            
+        return updated_user
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Ошибка при обновлении аватара пользователя: {str(e)}"
-        ) 
+        logger.error(f"Ошибка при обновлении аватара пользователя {user_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail="Внутренняя ошибка сервера") 
