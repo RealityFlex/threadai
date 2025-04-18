@@ -744,9 +744,10 @@ class PostService:
             if not user:
                 return None
             
-            # Получаем теги пользователя через связь TagForUser
+            # Получаем теги пользователя через связь TagForUser с информацией о типе тега
             user_tags = (
-                db.query(Tag)
+                db.query(Tag, TagType)
+                .join(TagType)
                 .join(TagForUser)
                 .filter(TagForUser.user_id == user_id)
                 .all()
@@ -757,9 +758,12 @@ class PostService:
                 {
                     "tag_id": tag.tag_id,
                     "name": tag.name,
-                    "tag_type_id": tag.tag_type_id
+                    "tag_type": {
+                        "type_id": tag_type.tag_type_id,
+                        "name": tag_type.name
+                    }
                 }
-                for tag in user_tags
+                for tag, tag_type in user_tags
             ]
             
             # Получаем количество постов пользователя
