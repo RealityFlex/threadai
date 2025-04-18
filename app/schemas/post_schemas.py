@@ -134,5 +134,13 @@ class UserDetail(UserBase):
     class Config:
         orm_mode = True
 
+class UserUpdateProfile(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    rating: Optional[float] = None
+
+class UserUpdateAvatar(BaseModel):
+    image: UploadFile
+
 # Разрешаем форвард-референс
 CommentWithReplies.update_forward_refs() 

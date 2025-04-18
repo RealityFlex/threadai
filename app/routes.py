@@ -6,7 +6,7 @@ from app.services.post_service import PostService
 from app.schemas.post_schemas import (
     Post, PostCreate, PostUpdate, PostDetail, 
     Like, LikeCreate, Comment, CommentCreate, Tag,
-    UserDetail, UserCreate, UserUpdate
+    UserDetail, UserCreate, UserUpdate, UserUpdateProfile, UserUpdateAvatar
 )
 from app.utils.init_data import initialize_db
 from app.utils.create_test_user import create_test_user
@@ -426,4 +426,62 @@ def delete_user(user_id: int, db: Session = Depends(get_db)):
     success = UserService.delete_user(db, user_id=user_id)
     if not success:
         raise HTTPException(status_code=404, detail="Пользователь не найден")
-    return {"detail": "Пользователь успешно удален"} 
+    return {"detail": "Пользователь успешно удален"}
+
+@router.put("/users/{user_id}/profile", response_model=UserDetail, tags=["Пользователи"])
+async def update_user_profile(
+    user_id: int,
+    name: Optional[str] = Form(None),
+    description: Optional[str] = Form(None),
+    rating: Optional[float] = Form(None),
+    db: Session = Depends(get_db)
+):
+    """
+    Обновить основную информацию о пользователе.
+    
+    Можно обновить имя, описание и рейтинг пользователя.
+    """
+    try:
+        user_data = UserUpdateProfile(
+            name=name,
+            description=description,
+            rating=rating
+        )
+        user = await UserService.update_user_profile(db, user_id=user_id, user_data=user_data)
+        if not user:
+            raise HTTPException(status_code=404, detail=f"Пользователь с ID {user_id} не найден")
+        return user
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Ошибка при обновлении профиля пользователя: {str(e)}"
+        )
+
+@router.put("/users/{user_id}/avatar", response_model=UserDetail, tags=["Пользователи"])
+async def update_user_avatar(
+    user_id: int,
+    image: UploadFile = File(...),
+    db: Session = Depends(get_db)
+):
+    """
+    Обновить аватар пользователя.
+    
+    При загрузке нового аватара, старый будет автоматически удален.
+    Поддерживаемые форматы: JPG, JPEG, PNG, GIF, WEBP.
+    Максимальный размер файла: 10MB.
+    """
+    try:
+        user_data = UserUpdateAvatar(image=image)
+        user = await UserService.update_user_avatar(db, user_id=user_id, user_data=user_data)
+        if not user:
+            raise HTTPException(status_code=404, detail=f"Пользователь с ID {user_id} не найден")
+        return user
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Ошибка при обновлении аватара пользователя: {str(e)}"
+        ) 
