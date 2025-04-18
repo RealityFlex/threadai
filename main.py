@@ -17,8 +17,9 @@ from app.utils.exception_handlers import (
 from app.utils.middleware import LoggingMiddleware
 from app.db.database import Base, engine
 
-# Создаем директорию для изображений, если ее нет
+# Создаем директории для загрузки файлов, если они не существуют
 os.makedirs("uploads/images", exist_ok=True)
+os.makedirs("uploads/avatars", exist_ok=True)
 
 # Создаем все таблицы, если они не существуют
 # В реальном приложении это лучше делать через миграции
@@ -30,7 +31,7 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Монтируем статические файлы для изображений
+# Монтируем статические файлы
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 # Настройка CORS для всех доменов

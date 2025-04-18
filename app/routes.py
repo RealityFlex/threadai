@@ -6,11 +6,12 @@ from app.services.post_service import PostService
 from app.schemas.post_schemas import (
     Post, PostCreate, PostUpdate, PostDetail, 
     Like, LikeCreate, Comment, CommentCreate, Tag,
-    UserDetail
+    UserDetail, UserCreate, UserUpdate
 )
 from app.utils.init_data import initialize_db
 from app.utils.create_test_user import create_test_user
 from app.models.models import User, PostType
+from app.services.user_service import UserService
 
 router = APIRouter()
 
@@ -342,4 +343,87 @@ def get_user_details(user_id: int, db: Session = Depends(get_db)):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Ошибка при получении информации о пользователе: {str(e)}"
-        ) 
+        )
+
+# Маршруты для пользователей
+@router.post("/users/", response_model=UserDetail, status_code=status.HTTP_201_CREATED, tags=["Пользователи"])
+async def create_user(
+    login: str = Form(...),
+    name: str = Form(...),
+    password: str = Form(...),
+    type_id: int = Form(...),
+    description: Optional[str] = Form(None),
+    rating: float = Form(0.0),
+    image: Optional[UploadFile] = File(None),
+    db: Session = Depends(get_db)
+):
+    """
+    Создать нового пользователя.
+    
+    Можно загрузить аватар пользователя.
+    """
+    try:
+        user_data = UserCreate(
+            login=login,
+            name=name,
+            password=password,
+            type_id=type_id,
+            description=description,
+            rating=rating,
+            image=image
+        )
+        user = await UserService.create_user(db, user_data=user_data)
+        return user
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Ошибка при создании пользователя: {str(e)}"
+        )
+
+@router.put("/users/{user_id}", response_model=UserDetail, tags=["Пользователи"])
+async def update_user(
+    user_id: int,
+    name: Optional[str] = Form(None),
+    description: Optional[str] = Form(None),
+    rating: Optional[float] = Form(None),
+    image: Optional[UploadFile] = File(None),
+    db: Session = Depends(get_db)
+):
+    """
+    Обновить информацию о пользователе.
+    
+    Можно обновить имя, описание, рейтинг и аватар.
+    При загрузке нового аватара, старый будет удален.
+    """
+    try:
+        user_data = UserUpdate(
+            name=name,
+            description=description,
+            rating=rating,
+            image=image
+        )
+        user = await UserService.update_user(db, user_id=user_id, user_data=user_data)
+        if not user:
+            raise HTTPException(status_code=404, detail=f"Пользователь с ID {user_id} не найден")
+        return user
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Ошибка при обновлении пользователя: {str(e)}"
+        )
+
+@router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Пользователи"])
+def delete_user(user_id: int, db: Session = Depends(get_db)):
+    """
+    Удалить пользователя.
+    
+    Удаляет пользователя и его аватар, если он существует.
+    """
+    success = UserService.delete_user(db, user_id=user_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+    return {"detail": "Пользователь успешно удален"} 

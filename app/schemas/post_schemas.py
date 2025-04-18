@@ -1,6 +1,7 @@
 from pydantic import BaseModel, Field, validator
 from typing import Optional, List, Union, ForwardRef
 from datetime import datetime, date
+from fastapi import UploadFile
 
 # Базовые схемы
 class TagBase(BaseModel):
@@ -116,6 +117,13 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     password: str
+    image: Optional[UploadFile] = None
+
+class UserUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    rating: Optional[float] = None
+    image: Optional[UploadFile] = None
 
 class UserDetail(UserBase):
     user_id: int
