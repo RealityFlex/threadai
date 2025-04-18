@@ -435,6 +435,11 @@ class PostService:
             if not post:
                 return None
             
+            # Получаем информацию о пользователе
+            user = db.query(User).filter(User.user_id == post.user_id).first()
+            if not user:
+                raise ValueError(f"Пользователь с ID {post.user_id} не найден")
+            
             # Получаем количество лайков
             likes_count = db.query(func.count(Like.like_id)).filter(Like.post_id == post_id).scalar()
             
@@ -496,6 +501,8 @@ class PostService:
                 "content": post.content,
                 "child_id": post.child_id,
                 "user_id": post.user_id,
+                "user_name": user.name,
+                "user_image": user.image_link,
                 "media_link": post.media_link,
                 "creation_date": post.creation_date,
                 "views_count": post.views_count,
