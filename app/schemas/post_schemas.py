@@ -117,13 +117,13 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     password: str
-    image: Optional[UploadFile] = None
+    image: Optional[bytes] = None
 
 class UserUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     rating: Optional[float] = None
-    image: Optional[UploadFile] = None
+    image: Optional[bytes] = None
 
 class UserDetail(UserBase):
     user_id: int
@@ -140,7 +140,7 @@ class UserUpdateProfile(BaseModel):
     rating: Optional[float] = None
 
 class UserUpdateAvatar(BaseModel):
-    image: UploadFile
+    image: bytes
 
 # Разрешаем форвард-референс
 CommentWithReplies.update_forward_refs() 

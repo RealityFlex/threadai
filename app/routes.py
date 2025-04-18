@@ -354,13 +354,13 @@ async def create_user(
     type_id: int = Form(...),
     description: Optional[str] = Form(None),
     rating: float = Form(0.0),
-    image: Optional[UploadFile] = File(None),
+    image: Optional[bytes] = File(None),
     db: Session = Depends(get_db)
 ):
     """
     Создать нового пользователя.
     
-    Можно загрузить аватар пользователя.
+    Можно загрузить аватар пользователя в бинарном формате.
     """
     try:
         user_data = UserCreate(
@@ -388,7 +388,7 @@ async def update_user(
     name: Optional[str] = Form(None),
     description: Optional[str] = Form(None),
     rating: Optional[float] = Form(None),
-    image: Optional[UploadFile] = File(None),
+    image: Optional[bytes] = File(None),
     db: Session = Depends(get_db)
 ):
     """
@@ -462,12 +462,13 @@ async def update_user_profile(
 @router.put("/users/{user_id}/avatar", response_model=UserDetail, tags=["Пользователи"])
 async def update_user_avatar(
     user_id: int,
-    image: UploadFile = File(...),
+    image: bytes = File(...),
     db: Session = Depends(get_db)
 ):
     """
     Обновить аватар пользователя.
     
+    Принимает изображение в бинарном формате.
     При загрузке нового аватара, старый будет автоматически удален.
     Поддерживаемые форматы: JPG, JPEG, PNG, GIF, WEBP.
     Максимальный размер файла: 10MB.

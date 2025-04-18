@@ -5,6 +5,8 @@ from app.schemas.post_schemas import UserCreate, UserUpdate, UserUpdateProfile, 
 from fastapi import UploadFile, HTTPException
 from app.utils.image_handler import ImageHandler
 import logging
+import tempfile
+import os
 
 logger = logging.getLogger("app")
 
@@ -24,14 +26,34 @@ class UserService:
             # Обрабатываем аватар, если он предоставлен
             image_link = None
             if user_data.image:
-                # Сохраняем изображение и получаем путь к нему
-                success, file_path, error_message = ImageHandler.save_image(user_data.image, prefix="avatar_", directory="avatars")
-                if not success:
-                    logger.error(f"Ошибка при сохранении аватара: {error_message}")
-                    raise HTTPException(status_code=400, detail=error_message)
-                
-                # Сохраняем ссылку на аватар
-                image_link = file_path
+                # Создаем временный файл для обработки бинарных данных
+                with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+                    temp_file.write(user_data.image)
+                    temp_file.flush()
+                    
+                    # Создаем UploadFile из временного файла
+                    upload_file = UploadFile(
+                        filename="avatar.jpg",
+                        file=open(temp_file.name, "rb")
+                    )
+                    
+                    # Сохраняем изображение и получаем путь к нему
+                    success, file_path, error_message = ImageHandler.save_image(
+                        upload_file, 
+                        prefix="avatar_", 
+                        directory="avatars"
+                    )
+                    
+                    # Закрываем и удаляем временный файл
+                    upload_file.file.close()
+                    os.unlink(temp_file.name)
+                    
+                    if not success:
+                        logger.error(f"Ошибка при сохранении аватара: {error_message}")
+                        raise HTTPException(status_code=400, detail=error_message)
+                    
+                    # Сохраняем ссылку на аватар
+                    image_link = file_path
             
             # Создаем пользователя
             db_user = User(
@@ -165,7 +187,7 @@ class UserService:
         Args:
             db (Session): Сессия базы данных
             user_id (int): ID пользователя
-            user_data (UserUpdateAvatar): Новый аватар
+            user_data (UserUpdateAvatar): Новый аватар в бинарном формате
             
         Returns:
             User: Обновленный пользователь
@@ -179,18 +201,34 @@ class UserService:
             if db_user.image_link and db_user.image_link.startswith("/uploads/avatars/"):
                 ImageHandler.delete_image(db_user.image_link)
             
-            # Сохраняем новое изображение и получаем путь к нему
-            success, file_path, error_message = ImageHandler.save_image(
-                user_data.image, 
-                prefix="avatar_", 
-                directory="avatars"
-            )
-            if not success:
-                logger.error(f"Ошибка при сохранении аватара: {error_message}")
-                raise HTTPException(status_code=400, detail=error_message)
-            
-            # Обновляем ссылку на аватар
-            db_user.image_link = file_path
+            # Создаем временный файл для обработки бинарных данных
+            with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+                temp_file.write(user_data.image)
+                temp_file.flush()
+                
+                # Создаем UploadFile из временного файла
+                upload_file = UploadFile(
+                    filename="avatar.jpg",
+                    file=open(temp_file.name, "rb")
+                )
+                
+                # Сохраняем изображение и получаем путь к нему
+                success, file_path, error_message = ImageHandler.save_image(
+                    upload_file, 
+                    prefix="avatar_", 
+                    directory="avatars"
+                )
+                
+                # Закрываем и удаляем временный файл
+                upload_file.file.close()
+                os.unlink(temp_file.name)
+                
+                if not success:
+                    logger.error(f"Ошибка при сохранении аватара: {error_message}")
+                    raise HTTPException(status_code=400, detail=error_message)
+                
+                # Обновляем ссылку на аватар
+                db_user.image_link = file_path
             
             db.commit()
             db.refresh(db_user)
