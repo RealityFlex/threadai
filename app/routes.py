@@ -17,7 +17,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
+router = APIRouter(prefix="/api")
 
 # Маршрут для инициализации БД
 @router.post("/system/init-db", tags=["Система"])
