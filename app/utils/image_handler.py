@@ -16,18 +16,19 @@ class ImageHandler:
     Файлы сохраняются с зашифрованным именем для безопасности.
     """
     
-    UPLOAD_DIR = "uploads/images"
+    UPLOAD_DIR = "uploads"
     ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
     MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
     
     @classmethod
-    def save_image(cls, file: UploadFile, prefix: str = "") -> Tuple[bool, Optional[str], Optional[str]]:
+    def save_image(cls, file: UploadFile, prefix: str = "", directory: str = "images") -> Tuple[bool, Optional[str], Optional[str]]:
         """
         Сохраняет загруженное изображение в папку с зашифрованным именем.
         
         Args:
             file (UploadFile): Загруженный файл
             prefix (str): Префикс для названия файла (например, 'post_', 'user_')
+            directory (str): Поддиректория для сохранения файла (например, 'images', 'avatars')
             
         Returns:
             Tuple[bool, Optional[str], Optional[str]]: 
@@ -63,18 +64,21 @@ class ImageHandler:
             # Формируем окончательное имя файла
             filename = f"{prefix}{timestamp}_{hashed_name}{ext}"
             
+            # Формируем путь к директории
+            upload_dir = os.path.join(cls.UPLOAD_DIR, directory)
+            
             # Убедимся, что директория существует
-            os.makedirs(cls.UPLOAD_DIR, exist_ok=True)
+            os.makedirs(upload_dir, exist_ok=True)
             
             # Полный путь для сохранения файла
-            file_path = os.path.join(cls.UPLOAD_DIR, filename)
+            file_path = os.path.join(upload_dir, filename)
             
             # Сохраняем файл
             with open(file_path, "wb") as buffer:
                 shutil.copyfileobj(file.file, buffer)
             
             # Формируем относительный путь для сохранения в БД
-            relative_path = f"/uploads/images/{filename}"
+            relative_path = f"/uploads/{directory}/{filename}"
             
             logger.info(f"Изображение сохранено: {file_path}")
             return True, relative_path, None
